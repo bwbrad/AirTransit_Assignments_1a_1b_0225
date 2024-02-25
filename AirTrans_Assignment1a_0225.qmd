@@ -1,0 +1,309 @@
+---
+title: "Air Transport Since 2023, Winners & Losers"
+subtitle: "CPLN 7500 Assignment 1a"
+author: "Bailey Bradford, Devon Chodzin, and Jose Fernandez"
+date: 2024-02-25
+toc: true
+format:
+  html:
+    self-contained: true
+    code-fold: true
+editor: visual
+execute:
+   message: false
+   warning: false
+reference-location: document
+---
+
+## Part 1: IDing Winners & Losers
+
+```{r}
+#| output: false
+
+# loading
+
+library(dplyr)
+library(tidyr)
+library(sf)
+library(ggplot2)
+library(gt)
+library(skynet)
+
+small_hubs <- read.delim("Data/SmallHubs.txt", header = TRUE, sep = "\t")
+large_hubs <- read.delim("Data/LargeHubs.txt", header = TRUE, sep = "\t")
+
+# cleaning
+
+small_hubs <- small_hubs %>% 
+  filter(COMMUTER > 100000)
+
+large_hubs <- large_hubs %>% 
+  filter(COMMUTER > 100000)
+
+years <- c("2013", "2014", "2015", "2016", "2017", "2018", "2019", "2020", "2021",
+           "2022", "2023")
+
+small_hubs_wide <- small_hubs %>% 
+  select(c(LOC_ID, APORT_NAME, CITY, SYSYEAR, T_ENPL)) %>% 
+  pivot_wider(names_from = SYSYEAR,
+              values_from = T_ENPL) %>% 
+  rename_with(~ paste0("year_", .), all_of(years)) %>% 
+  mutate(chng_enpl = year_2023 - year_2013,
+         pct_enpl = chng_enpl / year_2023)
+  
+large_hubs_wide <- large_hubs %>% 
+  select(c(LOC_ID, APORT_NAME, CITY, SYSYEAR, T_ENPL)) %>% 
+  pivot_wider(names_from = SYSYEAR,
+              values_from = T_ENPL) %>% 
+  rename_with(~ paste0("year_", .), all_of(years)) %>% 
+  mutate(chng_enpl = year_2023 - year_2013,
+         pct_enpl = chng_enpl / year_2023)
+
+# sorting max and min enplanement indicators
+
+small_hubs_max <- small_hubs_wide %>% 
+  slice_max(order_by = pct_enpl, n = 5) %>% 
+  select(c(LOC_ID, APORT_NAME, CITY, year_2023, chng_enpl, pct_enpl)) %>% 
+  mutate(status = "Greatest gains")
+
+small_hubs_min <- small_hubs_wide %>% 
+  slice_min(order_by = pct_enpl, n = 5) %>% 
+  select(c(LOC_ID, APORT_NAME, CITY, year_2023, chng_enpl, pct_enpl)) %>% 
+  mutate(status = "Greatest loss")
+
+small_hubs_win_lose <- rbind(small_hubs_max, small_hubs_min)
+
+large_hubs_max <- large_hubs_wide %>% 
+  slice_max(order_by = pct_enpl, n = 5) %>% 
+  select(c(LOC_ID, APORT_NAME, CITY, year_2023, chng_enpl, pct_enpl)) %>% 
+  mutate(status = "Greatest gains")
+
+large_hubs_min <- large_hubs_wide %>% 
+  slice_min(order_by = pct_enpl, n = 5) %>% 
+  select(c(LOC_ID, APORT_NAME, CITY, year_2023, chng_enpl, pct_enpl)) %>% 
+  mutate(status = "Greatest loss")
+
+large_hubs_win_lose <- rbind(large_hubs_max, large_hubs_min)
+```
+
+We compared absolute and percentage change in total enplanements at large and small hubs between 2013 and 2023 to determine winners and losers. To do this, we first excluded all hubs with fewer than 100,000 annual commuter enplanements. We pivoted our TAF data to a wide format to calculate year-over-year changes in enplanements over the study period. We then created columns that examined the absolute change in enplanements and proportionate change in enplanements between 2013 and 2023.
+
+We selected one “winner” and one “loser” from the large and small hub databases, respectively. We selected **Orlando International Airport** as the large hub “winner” because of a massive absolute and percentage growth in enplanements over time. Orlando observed an increase of over 10,000,000 enplanements in the study period. While some large hubs saw greater percentage increases in enplanement growth, this growth is staggering, so it is our large hub “winner.” 
+
+Our small hub winner is **Savannah/Hilton Head International Airport**, which more than doubled its number of annual enplanements from 0.8 to 1.8 million. Our large hub loser is **Philadelphia International Airport**, one of two large hubs that observed a negative change in enplanements, nearly double the loss of enplanements as Detroit. Our small hub loser is **Dayton International Airport**, which decreased from 1.27 million enplanements to 0.57 million, losing more than half of its annual air service.
+
+```{r}
+gt(large_hubs_win_lose) %>%
+  fmt_number(columns = c(year_2023, chng_enpl), decimals = 0) %>% 
+  fmt_percent(columns = pct_enpl, decimals = 0) %>%
+  tab_header(title = md("**Winning and losing large hub airports**"),
+             subtitle = "Total enplanements, 2013-2023") %>%
+  opt_align_table_header(align = "left") %>%
+  cols_hide(status) %>% 
+  cols_label(LOC_ID = "Code",
+             APORT_NAME = "Name",
+             CITY = "City",
+             year_2023 = "Total, 2023",
+             chng_enpl = "Change, 2013-2023",
+             pct_enpl = "Change, % of 2023 total") %>% 
+  tab_spanner(label = md("**Airport**"),
+              columns = 1:3) %>%
+  tab_spanner(label = md("**Enplanements**"),
+              columns = 4:6) %>%
+  tab_row_group(label = md("**Highest growth**"),
+                rows = which(small_hubs_win_lose$status == "Greatest gains")) %>% 
+  tab_row_group(label = md("**Slowest growth (or loss)**"),
+                rows = which(small_hubs_win_lose$status == "Greatest loss")) %>% 
+  tab_source_note(source_note = "Source: Federal Aviation Administration (FAA)")
+```
+
+```{r}
+gt(small_hubs_win_lose) %>%
+  fmt_number(columns = c(year_2023, chng_enpl), decimals = 0) %>% 
+  fmt_percent(columns = pct_enpl, decimals = 0) %>%
+  tab_header(title = md("**Winning and losing small hub airports**"),
+             subtitle = "Total enplanements, 2013-2023") %>%
+  opt_align_table_header(align = "left") %>%
+  cols_hide(status) %>% 
+  cols_label(LOC_ID = "Code",
+             APORT_NAME = "Name",
+             CITY = "City",
+             year_2023 = "Total, 2023",
+             chng_enpl = "Change, 2013-2023",
+             pct_enpl = "Change, % of 2023 total") %>% 
+  tab_spanner(label = md("**Airport**"),
+              columns = 1:3) %>%
+  tab_spanner(label = md("**Enplanements**"),
+              columns = 4:6) %>%
+  tab_row_group(label = md("**Highest growth**"),
+                rows = which(small_hubs_win_lose$status == "Greatest gains")) %>% 
+  tab_row_group(label = md("**Slowest growth (or loss)**"),
+                rows = which(small_hubs_win_lose$status == "Greatest loss")) %>% 
+  tab_source_note(source_note = "Source: Federal Aviation Administration (FAA)")
+```
+
+## Part 2: Observing Delay Trends at Winning & Losing Airports
+
+We pulled on-time service data using R’s Skynet package for March 2013, 2015, 2017, 2019, 2021, and 2023 to observe changes over time in on-time service for our selected airports. We calculated the mean, standard deviation, and median departure and arrival delays for all four airports, as well as the standard deviation. Since the data is discrete and distributed abnormally, we decided to compare median departure and arrival delays per airport per year to see if we observed meaningful changes over the study period.
+
+```{r}
+#| output: false
+
+#skynet pull
+
+ontime_2023_3 <- download_ontime(y = 2023, m = 3, auto = TRUE)
+ontime_2021_3 <- download_ontime(y = 2021, m = 3, auto = TRUE)
+ontime_2019_3 <- download_ontime(y = 2019, m = 3, auto = TRUE)
+ontime_2017_3 <- download_ontime(y = 2017, m = 3, auto = TRUE)
+ontime_2015_3 <- download_ontime(y = 2015, m = 3, auto = TRUE)
+ontime_2013_3 <- download_ontime(y = 2013, m = 3, auto = TRUE)
+
+# filtering for airports of interest
+
+ontime_2023_3_org <- ontime_2023_3 %>% 
+  filter(origin %in% c("MCO", "PHL", "SAV", "DAY")) %>% 
+  select(origin, year, dep_delay) %>%
+  rename(delay = dep_delay) %>% 
+  mutate(direction = "Departure")
+
+ontime_2023_3_dest <- ontime_2023_3 %>% 
+  filter(dest %in% c("MCO", "PHL", "SAV", "DAY")) %>% 
+  select(dest, year, arr_delay) %>%
+  rename(delay = arr_delay) %>%
+  mutate(direction = "Arrival")
+
+ontime_2021_3_org <- ontime_2021_3 %>% 
+  filter(origin %in% c("MCO", "PHL", "SAV", "DAY")) %>% 
+  select(origin, year, dep_delay) %>%
+  rename(delay = dep_delay) %>% 
+  mutate(direction = "Departure")
+
+ontime_2021_3_dest <- ontime_2021_3 %>% 
+  filter(dest %in% c("MCO", "PHL", "SAV", "DAY")) %>% 
+  select(dest, year, arr_delay) %>%
+  rename(delay = arr_delay) %>% 
+  mutate(direction = "Arrival")
+
+ontime_2019_3_org <- ontime_2019_3 %>% 
+  filter(origin %in% c("MCO", "PHL", "SAV", "DAY")) %>% 
+  select(origin, year, dep_delay) %>%
+  rename(delay = dep_delay) %>% 
+  mutate(direction = "Departure")
+
+ontime_2019_3_dest <- ontime_2019_3 %>% 
+  filter(dest %in% c("MCO", "PHL", "SAV", "DAY")) %>% 
+  select(dest, year, arr_delay) %>%
+  rename(delay = arr_delay) %>% 
+  mutate(direction = "Arrival")
+
+ontime_2017_3_org <- ontime_2017_3 %>% 
+  filter(origin %in% c("MCO", "PHL", "SAV", "DAY")) %>% 
+  select(origin, year, dep_delay) %>%
+  rename(delay = dep_delay) %>% 
+  mutate(direction = "Departure")
+
+ontime_2017_3_dest <- ontime_2017_3 %>% 
+  filter(dest %in% c("MCO", "PHL", "SAV", "DAY")) %>% 
+  select(dest, year, arr_delay) %>%
+  rename(delay = arr_delay) %>% 
+  mutate(direction = "Arrival")
+
+ontime_2015_3_org <- ontime_2015_3 %>% 
+  filter(origin %in% c("MCO", "PHL", "SAV", "DAY")) %>% 
+  select(origin, year, dep_delay) %>%
+  rename(delay = dep_delay) %>% 
+  mutate(direction = "Departure")
+
+ontime_2015_3_dest <- ontime_2015_3 %>% 
+  filter(dest %in% c("MCO", "PHL", "SAV", "DAY")) %>% 
+  select(dest, year, arr_delay) %>%
+  rename(delay = arr_delay) %>% 
+  mutate(direction = "Arrival")
+
+ontime_2013_3_org <- ontime_2013_3 %>% 
+  filter(origin %in% c("MCO", "PHL", "SAV", "DAY")) %>% 
+  select(origin, year, dep_delay) %>%
+  rename(delay = dep_delay) %>% 
+  mutate(direction = "Departure")
+
+ontime_2013_3_dest <- ontime_2013_3 %>% 
+  filter(dest %in% c("MCO", "PHL", "SAV", "DAY")) %>% 
+  select(dest, year, arr_delay) %>%
+  rename(delay = arr_delay) %>% 
+  mutate(direction = "Arrival")
+
+#bind, group_by, and summarize for viz
+
+arr_delay_rbind <- rbind(ontime_2023_3_dest, ontime_2021_3_dest,
+                         ontime_2019_3_dest, ontime_2017_3_dest,
+                         ontime_2015_3_dest, ontime_2013_3_dest) %>% 
+  na.omit() %>% 
+  rename(flight_year = year)
+
+arr_delay_sum <- arr_delay_rbind %>%
+  group_by(dest, flight_year) %>% 
+  summarize(med_arr_delay = median(delay, na.rm = TRUE),
+            avg_arr_delay = mean(delay, na.rm = TRUE),
+            sd_delay = sd(delay, na.rm = TRUE))
+
+dept_delay_rbind <- rbind(ontime_2023_3_org, ontime_2021_3_org,
+                         ontime_2019_3_org, ontime_2017_3_org, 
+                         ontime_2015_3_org, ontime_2013_3_org) %>% 
+  na.omit() %>% 
+  rename(flight_year = year)
+
+dept_delay_sum <- dept_delay_rbind %>%
+  group_by(origin, flight_year) %>% 
+  summarize(med_dept_delay = median(delay, na.rm = TRUE),
+            avg_dept_delay = mean(delay, na.rm = TRUE),
+            sd_delay = sd(delay, na.rm = TRUE))
+```
+
+Unsurprisingly, the **median departure and arrival delays for all four airports are fairly close together**, hovering usually just below zero, but we did observe some slight trends over time. Orlando’s median delays are the least negative and, over time, they increase slightly, which may be representative of increased air traffic from demand and challenges with large aircraft. Savannah/Hilton Head International Airport’s delays started off similar to Philadelphia and Dayton but stayed slightly more level, ending up with median delays between Orlando and the “losers.”
+
+Dayton and Philadelphia observed median delays that got more negative over time, perhaps indicating that the airport has plenty of room for aircraft and reduced runway demand, allowing aircraft to land or depart comparatively quickly. This tracks given the significant reduction in annual enplanements observed. There is reason to believe that Philadelphia- and Dayton-area travelers are either choosing other modes or flying out of different airports, and reason to believe that visitors to these destinations are both decreasing in quantity and possibly choosing other nearby airports to access lower fares or better services. 
+
+```{r}
+ggplot(arr_delay_sum, 
+       aes(x = flight_year, y = med_arr_delay, color = dest)) +
+  geom_line() +
+  geom_hline(yintercept = 0) +
+  scale_color_discrete(name = "Arriving airport",
+                       labels = c("Dayton (DAY)", "Orlando (MCO)",
+                                  "Philadelphia (PHL)", "Savannah (SAV)")) +
+  scale_x_continuous(breaks = c(2013, 2015, 2017, 2019, 2021, 2023), 
+                     labels = c("2013", "2015", "2017", "2019", "2021", "2023")) +
+  geom_point(size = 2) +
+  theme_minimal() +
+  labs(title = "Median arrival delay, March 2013 to March 2023",
+       x = "Year",
+       y = "Median arrival delay",
+       caption = "Source: Bureau of Transportation Statistics (BTS)") +
+  theme(legend.position = "bottom",
+        plot.title = element_text(face = "bold", margin = margin(b = 20)),
+        legend.title = element_text(face = "bold"),
+        plot.caption = element_text(hjust = 0))
+```
+
+```{r}
+ggplot(dept_delay_sum, 
+       aes(x = flight_year, y = med_dept_delay, color = origin)) +
+  geom_line() +
+  geom_hline(yintercept = 0) +
+  scale_color_discrete(name = "Departing airport",
+                       labels = c("Dayton (DAY)", "Orlando (MCO)",
+                                  "Philadelphia (PHL)", "Savannah (SAV)")) +
+  scale_x_continuous(breaks = c(2013, 2015, 2017, 2019, 2021, 2023), 
+                     labels = c("2013", "2015", "2017", "2019", "2021", "2023")) +
+  geom_point(size = 2) +
+  theme_minimal() +
+  labs(title = "Median departure delay, March 2013 to March 2023",
+       x = "Year",
+       y = "Median departure delay",
+       caption = "Source: Bureau of Transportation Statistics (BTS)") +
+  theme(legend.position = "bottom",
+        plot.title = element_text(face = "bold", margin = margin(b = 20)),
+        legend.title = element_text(face = "bold"),
+        plot.caption = element_text(hjust = 0))
+```
+

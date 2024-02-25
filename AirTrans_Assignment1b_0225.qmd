@@ -1,0 +1,48 @@
+---
+title: "Bureau of Transportation Statistics (BTS) Finance"
+subtitle: "CPLN 7500 Assignment 1b"
+author: "Bailey Bradford, Devon Chodzin, and Jose Fernandez"
+date: 2024-02-25
+toc: true
+format:
+  html:
+    self-contained: true
+    code-fold: true
+editor: visual
+execute:
+   message: false
+   warning: false
+reference-location: document
+---
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(gt)
+
+bts22 <- read.csv("Data/Report127_2022.csv") %>% 
+  mutate(report_year = "2022")
+  
+bts13 <- read.csv("Data/Report127_2013.csv") %>% 
+  mutate(report_year = "2013")
+
+bts <- rbind(bts22, bts13)
+
+airports_of_interest <- c("ASHEVILLE REGIONAL", "SAVANNAH INTERNATIONAL",
+                          "MYRTLE BEACH INTL", "EUGENE - MAHLON SWEET FIELD", 
+                          "PALM SPRINGS INTERNATIONAL")
+
+bts_airports <- bts %>%
+  filter(Airport.Name %in% airports_of_interest)
+
+airport_rev <- bts_airports %>%
+  select(Airport.Name, LOC_ID, FYE, Total.Passenger.Airline.Aeronautical.Revenue,
+         Total.Non.Passenger.Aeronautical.Revenue, Total.Aeronautical.Revenue,
+         Total.Non.Aeronautical.Revenue)
+
+airport_cost <- bts_airports %>%
+  select(Airport.Name, LOC_ID, FYE, Personnel.compensation.and.benefits,
+         Supplies.and.materials, Total.Operating.Expenses)
+```
+
